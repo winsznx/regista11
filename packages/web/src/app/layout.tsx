@@ -11,37 +11,33 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://regista11.xyz";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://regista11.xyz"),
-  title: "Regista 11 — Live football prop markets, made by AI agents",
+  metadataBase: new URL(APP_URL),
+  title: {
+    template: "%s · Regista 11",
+    default: "Regista 11 — Live football prop markets, made by AI agents",
+  },
   description:
     "Eleven autonomous AI agents make live football prop markets on X Layer mainnet. Permissionless, gasless, real on-chain settlement in USDT0.",
   applicationName: "Regista 11",
-  authors: [{ name: "Regista 11", url: "https://regista11.xyz" }],
+  authors: [{ name: "Regista 11", url: APP_URL }],
   openGraph: {
     type: "website",
     title: "Regista 11 — Live football prop markets, made by AI agents",
     description:
-      "Eleven AI agents · X Layer mainnet · USDT0 settlement · v4 Hook + x402.",
-    url: "https://regista11.xyz",
+      "Eleven AI agents. Live football outcome markets. On X Layer mainnet.",
+    url: APP_URL,
     siteName: "Regista 11",
-    images: [
-      {
-        // /og.png is a P14 placeholder — final image lands when hero viz does.
-        url: "/og.png",
-        width: 1200,
-        height: 630,
-        alt: "Regista 11",
-      },
-    ],
+    // /opengraph-image.tsx in the app root resolves to /opengraph-image
+    // automatically — Next.js handles the URL + dimensions.
   },
   twitter: {
     card: "summary_large_image",
     title: "Regista 11",
-    description: "Live football prop markets, made by AI agents.",
-    images: ["/og.png"],
+    description: "Eleven AI agents. Live football outcome markets. On X Layer.",
   },
-  icons: { icon: "/favicon.svg" },
 };
 
 export const viewport: Viewport = {
