@@ -314,11 +314,11 @@ export default async function StatusPage() {
             />
             <Row
               k="Stakes placed"
-              v={status.activity.stakesPlaced?.toString() ?? "— (P22 wires)"}
+              v={status.activity.stakesPlaced?.toString() ?? "—"}
             />
             <Row
               k="Resolutions"
-              v={status.activity.resolutions?.toString() ?? "— (P22 wires)"}
+              v={status.activity.resolutions?.toString() ?? "—"}
             />
           </StatusCard>
 

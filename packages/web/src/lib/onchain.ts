@@ -73,14 +73,51 @@ export async function getFactoryMarkets(): Promise<FactoryMarketEvent[]> {
 
   return cached(`factory-markets:${WEB_DEPLOYMENT.factory}:${fromBlock}`, async () => {
     const client = getPublicClient();
-    const logs = await client.getLogs({
-      address: WEB_DEPLOYMENT.factory!,
-      event: MARKET_CREATED_EVENT,
-      fromBlock,
-      toBlock: "latest",
-    });
 
-    return logs.map((log) => ({
+    // X Layer's RPC caps a single eth_getLogs request to a 100-block
+    // window. The factory was deployed at block ~61M and current head
+    // is millions of blocks higher — a naive single call fails with
+    // "block range greater than 100 max."
+    //
+    // Strategy: cap the scan to the most recent LOOKBACK_BLOCKS (~28h
+    // at X Layer's ~2s block time), chunk into 100-block windows, and
+    // fetch in parallel batches. Markets older than that aren't shown
+    // here (judges/users can find them via OKLink) — the deep-link
+    // /market/[address] still works for any address regardless of age.
+    const CHUNK = 100n;
+    const PARALLEL = 8;
+    const LOOKBACK_BLOCKS = 50_000n;
+    const latest = await client.getBlockNumber();
+    const scanFrom = fromBlock > latest - LOOKBACK_BLOCKS
+      ? fromBlock
+      : latest - LOOKBACK_BLOCKS;
+
+    const ranges: Array<{ from: bigint; to: bigint }> = [];
+    for (let cursor = scanFrom; cursor <= latest; cursor += CHUNK) {
+      const to = cursor + CHUNK - 1n;
+      ranges.push({ from: cursor, to: to > latest ? latest : to });
+    }
+
+    // Inferred element type carries the decoded `args` because we pass
+    // a typed `event:` arg below — typing the accumulator explicitly
+    // would lose that narrowing. Build via Promise.all batches and flat.
+    const batches = [];
+    for (let i = 0; i < ranges.length; i += PARALLEL) {
+      const batch = ranges.slice(i, i + PARALLEL);
+      const results = await Promise.all(
+        batch.map((r) =>
+          client.getLogs({
+            address: WEB_DEPLOYMENT.factory!,
+            event: MARKET_CREATED_EVENT,
+            fromBlock: r.from,
+            toBlock: r.to,
+          }),
+        ),
+      );
+      batches.push(...results.flat());
+    }
+
+    return batches.map((log) => ({
       marketAddress: log.args.hook as Address,
       agent: log.args.agent as Address,
       matchId: log.args.matchId as Hex,
