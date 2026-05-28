@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Code2, MessageSquare, FileText } from "lucide-react";
 
@@ -8,6 +9,27 @@ import { RegistaMark } from "@/icons/RegistaMark";
 export function Footer() {
   return (
     <footer className="mt-12 border-t border-[var(--color-steel-gray)] bg-[var(--color-fog-gray)]">
+      {/* Brand stamp — full-bleed dark band hosting the Regista 11 wordmark
+          PNG. Next/image converts the 3.3 MB source to AVIF/WebP variants
+          at 4 widths (sizes attr below) and lazy-loads when the footer
+          scrolls into view — the original PNG is never sent to a browser. */}
+      <div className="relative isolate overflow-hidden border-b border-white/5"
+           style={{ background: "linear-gradient(180deg, #05070f 0%, #0a0d1f 100%)" }}>
+        <Container>
+          <div className="relative mx-auto flex h-[180px] w-full max-w-[640px] items-center justify-center md:h-[240px]">
+            <Image
+              src="/landing/regista11-logo.png"
+              alt="Regista 11"
+              fill
+              quality={88}
+              sizes="(min-width: 768px) 640px, 90vw"
+              className="object-contain"
+              loading="lazy"
+              priority={false}
+            />
+          </div>
+        </Container>
+      </div>
       <Container>
         <div className="grid gap-10 py-12 md:grid-cols-3 md:gap-8">
           <div className="space-y-3">
