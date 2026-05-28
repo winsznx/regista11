@@ -53,9 +53,12 @@ async function cached<T>(key: string, loader: () => Promise<T>): Promise<T> {
   return value;
 }
 
-/** Test-only: drop everything in the in-memory read cache. */
+/** Test-only: drop the in-memory read cache AND the indexer cursor so
+ *  the next call re-scans from the deploy block. */
 export function clearOnchainCache(): void {
   CACHE.clear();
+  INDEXER_STATE = null;
+  INDEXER_RUNNING = false;
 }
 
 export interface FactoryMarketEvent {
@@ -67,94 +70,142 @@ export interface FactoryMarketEvent {
   blockNumber: bigint;
 }
 
+// ─── Persistent indexer state (module scope, per-container instance) ───
+// Across the container's lifetime we keep an accumulated list of every
+// MarketCreated event from the factory and the highest block we've
+// successfully scanned. Each /markets request only scans (cursor → head)
+// — usually a handful of 100-block windows — instead of re-scanning the
+// entire deploy range every time. Cold-start gets the heavy work but
+// subsequent reads are O(small).
+interface IndexerState {
+  cursorBlock: bigint;
+  events: FactoryMarketEvent[];
+  seenAddresses: Set<string>; // de-dupe guard (block reorg / overlap)
+}
+let INDEXER_STATE: IndexerState | null = null;
+let INDEXER_RUNNING = false;
+const PER_CALL_SCAN_BUDGET_MS = 4_500; // soft cap per /markets request
+
 /**
- * Scan the factory's MarketCreated log range. Returns [] when the factory
- * address is null (pre-deploy) — never throws on the undeployed path.
+ * Returns the indexed factory MarketCreated events. Implements an
+ * incremental indexer over module-scoped state: each call advances the
+ * cursor toward `latest` in 100-block chunks until either caught up or
+ * the per-call budget elapses. Subsequent calls resume from the saved
+ * cursor — no re-scanning. Returns [] when the factory is undeployed.
  */
 export async function getFactoryMarkets(): Promise<FactoryMarketEvent[]> {
   if (!WEB_DEPLOYMENT.factory) return [];
-  const fromBlock = WEB_DEPLOYMENT.deployedAtBlock ?? 0n;
+  const deployBlock = WEB_DEPLOYMENT.deployedAtBlock ?? 0n;
 
-  return cached(`factory-markets:${WEB_DEPLOYMENT.factory}:${fromBlock}`, async () => {
-    const client = getPublicClient();
-
-    // X Layer's free RPC enforces TWO constraints on eth_getLogs:
-    //   1. Each call's block range must be ≤ 100 blocks ("over 100 max")
-    //   2. Aggregate calls per second are rate-limited ("over rate limit")
-    //
-    // We satisfy (1) by chunking into 100-block windows. We satisfy (2)
-    // by capping the scan depth to MAX_CHUNKS × 100 blocks (~2.8h at
-    // X Layer's ~2s block time) and walking the chunks with low
-    // parallelism + a 429-retry with backoff. The 60s cache (above)
-    // absorbs repeat reads. Markets minted earlier than the scan window
-    // remain reachable via the deep-link /market/[address] page.
-    const CHUNK = 100n;
-    const PARALLEL = 3;
-    const MAX_CHUNKS = 50;
-    const LOOKBACK_BLOCKS = BigInt(MAX_CHUNKS) * CHUNK; // 5_000
-    const latest = await client.getBlockNumber();
-    const scanFrom = fromBlock > latest - LOOKBACK_BLOCKS
-      ? fromBlock
-      : latest - LOOKBACK_BLOCKS;
-
-    const ranges: Array<{ from: bigint; to: bigint }> = [];
-    for (let cursor = scanFrom; cursor <= latest; cursor += CHUNK) {
-      const to = cursor + CHUNK - 1n;
-      ranges.push({ from: cursor, to: to > latest ? latest : to });
-    }
-
-    // Type carrier: one successful call's return type carries decoded
-    // `args` because we pass the typed `event:` arg below. Using the
-    // inferred type as the chunk-result type preserves that narrowing.
-    type ChunkResult = Awaited<
-      ReturnType<typeof client.getLogs<typeof MARKET_CREATED_EVENT>>
-    >;
-
-    // Fetch with bounded parallelism + 429-aware retry. A single chunk
-    // failing is non-fatal — we collect the rest. This trades some
-    // completeness for resilience against transient RPC rate spikes,
-    // which is the right call for a public read endpoint.
-    const fetchChunk = async (
-      r: { from: bigint; to: bigint },
-      attempt = 0,
-    ): Promise<ChunkResult> => {
-      try {
-        return await client.getLogs({
-          address: WEB_DEPLOYMENT.factory!,
-          event: MARKET_CREATED_EVENT,
-          fromBlock: r.from,
-          toBlock: r.to,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const isRateLimit =
-          msg.includes("rate limit") ||
-          msg.includes("429") ||
-          msg.includes("over rate");
-        if (isRateLimit && attempt < 3) {
-          await new Promise((res) => setTimeout(res, 600 * (attempt + 1)));
-          return fetchChunk(r, attempt + 1);
-        }
-        return [] as unknown as ChunkResult;
-      }
+  // Reset state if the factory address changed across hot reloads.
+  if (INDEXER_STATE === null) {
+    INDEXER_STATE = {
+      cursorBlock: deployBlock - 1n,
+      events: [],
+      seenAddresses: new Set(),
     };
+  }
 
-    const batches: ChunkResult = [] as unknown as ChunkResult;
-    for (let i = 0; i < ranges.length; i += PARALLEL) {
-      const batch = ranges.slice(i, i + PARALLEL);
-      const results = await Promise.all(batch.map((r) => fetchChunk(r)));
-      for (const r of results) batches.push(...r);
+  // Avoid two concurrent /markets handlers both scanning; the second
+  // request reads the current state and returns immediately.
+  if (INDEXER_RUNNING) return [...INDEXER_STATE.events];
+  INDEXER_RUNNING = true;
+  try {
+    await advanceIndexer();
+  } finally {
+    INDEXER_RUNNING = false;
+  }
+  return [...INDEXER_STATE.events];
+}
+
+async function advanceIndexer(): Promise<void> {
+  const state = INDEXER_STATE!;
+  const client = getPublicClient();
+
+  // X Layer free RPC: each eth_getLogs ≤ 100 blocks ("over 100 max"),
+  // and aggregate calls/sec are rate-limited ("over rate limit"). We
+  // walk forward from the saved cursor in 100-block windows with
+  // bounded parallelism + 429-aware retry. The per-call budget gives
+  // user requests a fast TTFB; remaining work resumes next request.
+  const CHUNK = 100n;
+  const PARALLEL = 3;
+  const start = Date.now();
+
+  const latest = await client.getBlockNumber();
+  if (latest <= state.cursorBlock) return; // already caught up
+
+  type ChunkResult = Awaited<
+    ReturnType<typeof client.getLogs<typeof MARKET_CREATED_EVENT>>
+  >;
+
+  const fetchChunk = async (
+    from: bigint,
+    to: bigint,
+    attempt = 0,
+  ): Promise<ChunkResult | null> => {
+    try {
+      return await client.getLogs({
+        address: WEB_DEPLOYMENT.factory!,
+        event: MARKET_CREATED_EVENT,
+        fromBlock: from,
+        toBlock: to,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isRateLimit =
+        msg.includes("rate limit") ||
+        msg.includes("429") ||
+        msg.includes("over rate");
+      if (isRateLimit && attempt < 3) {
+        await new Promise((res) => setTimeout(res, 600 * (attempt + 1)));
+        return fetchChunk(from, to, attempt + 1);
+      }
+      // Non-recoverable: signal "don't advance past this block."
+      return null;
+    }
+  };
+
+  while (state.cursorBlock < latest) {
+    if (Date.now() - start > PER_CALL_SCAN_BUDGET_MS) break;
+
+    const batchRanges: Array<{ from: bigint; to: bigint }> = [];
+    let cursor = state.cursorBlock + 1n;
+    for (let i = 0; i < PARALLEL && cursor <= latest; i++) {
+      const to = cursor + CHUNK - 1n;
+      batchRanges.push({ from: cursor, to: to > latest ? latest : to });
+      cursor = to + 1n;
     }
 
-    return batches.map((log) => ({
-      marketAddress: log.args.hook as Address,
-      agent: log.args.agent as Address,
-      matchId: log.args.matchId as Hex,
-      commitHash: log.args.commitHash as Hex,
-      marketDeadline: BigInt(log.args.marketDeadline ?? 0),
-      blockNumber: log.blockNumber ?? 0n,
-    }));
-  });
+    const results = await Promise.all(
+      batchRanges.map((r) => fetchChunk(r.from, r.to)),
+    );
+
+    // Advance cursor only past chunks that succeeded contiguously.
+    let aborted = false;
+    for (let i = 0; i < results.length; i++) {
+      const logs = results[i];
+      const range = batchRanges[i]!;
+      if (logs == null) {
+        aborted = true;
+        break;
+      }
+      for (const log of logs) {
+        const hookAddr = log.args.hook as Address;
+        if (state.seenAddresses.has(hookAddr.toLowerCase())) continue;
+        state.seenAddresses.add(hookAddr.toLowerCase());
+        state.events.push({
+          marketAddress: hookAddr,
+          agent: log.args.agent as Address,
+          matchId: log.args.matchId as Hex,
+          commitHash: log.args.commitHash as Hex,
+          marketDeadline: BigInt(log.args.marketDeadline ?? 0),
+          blockNumber: log.blockNumber ?? 0n,
+        });
+      }
+      state.cursorBlock = range.to;
+    }
+    if (aborted) break;
+  }
 }
 
 /**
