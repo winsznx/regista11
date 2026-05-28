@@ -11,8 +11,9 @@ import type { MarketRow } from "@/types/market";
 // not Vercel Edge. next/og's ImageResponse runs on the default Node runtime
 // in Next.js 15 without ceremony.
 
+// 3:2 per Farcaster Mini App embed spec (was 1.91:1 under Frames v1).
 const W = 1200;
-const H = 630;
+const H = 800;
 
 const COLORS = {
   pitchBg: "#1a2e1a",

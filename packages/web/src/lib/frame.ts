@@ -92,12 +92,67 @@ export function buildFrameTxResponse(typedData: {
 
 /* ──────────────────────── HTML renderer ──────────────────────── */
 
+/** The single `fc:miniapp` JSON object the current Mini App spec (May 2026)
+ *  expects. One button per embed; clicking it launches the Mini App URL.
+ *  Field constraints come from miniapps.farcaster.xyz/docs/specification:
+ *    title  ≤ 32 chars
+ *    imageUrl ≤ 1024 chars, 3:2 aspect ratio
+ *    url    ≤ 1024 chars (defaults to current URL when omitted)
+ *    action.type ∈ { "launch_miniapp", "launch_frame" } (launch_frame = legacy alias) */
+interface MiniAppEmbed {
+  version: "1";
+  imageUrl: string;
+  button: {
+    title: string;
+    action: {
+      type: "launch_miniapp";
+      name: string;
+      url: string;
+      splashImageUrl?: string;
+      splashBackgroundColor?: string;
+    };
+  };
+}
+
+function buildMiniAppEmbed(spec: FrameSpec): MiniAppEmbed {
+  // Pick the first button as the launcher — the spec only allows one
+  // button per embed (the multi-button Frames-v1 grid is gone). For our
+  // OVER/UNDER markets that means the cast surface is a single
+  // "Open market" CTA; the actual side selection happens once the user
+  // is inside the Mini App / dApp page.
+  const primary = spec.buttons[0];
+  const launchUrl =
+    primary?.action === "link" && primary.target
+      ? primary.target
+      : spec.fallbackUrl ?? APP_URL;
+
+  const title = primary?.label ?? "Open market";
+  return {
+    version: "1",
+    imageUrl: spec.imageUrl,
+    button: {
+      // 32-char cap per spec.
+      title: title.slice(0, 32),
+      action: {
+        type: "launch_miniapp",
+        name: "Regista 11",
+        url: launchUrl,
+        splashImageUrl: `${APP_URL}/icon.png`,
+        splashBackgroundColor: "#111a4a",
+      },
+    },
+  };
+}
+
 /** Serialize a FrameSpec into a complete `<!doctype html>` document. */
 export function renderFrameHtml(spec: FrameSpec): string {
+  const embedJson = htmlEscape(JSON.stringify(buildMiniAppEmbed(spec)));
   const tags: string[] = [
-    `<meta property="fc:frame" content="vNext" />`,
-    `<meta property="fc:frame:image" content="${htmlEscape(spec.imageUrl)}" />`,
-    `<meta property="fc:frame:image:aspect_ratio" content="${spec.imageAspectRatio ?? "1.91:1"}" />`,
+    // Primary Mini App embed — what current Warpcast/farcaster.xyz reads.
+    `<meta name="fc:miniapp" content="${embedJson}" />`,
+    // Legacy alias kept for older clients still parsing fc:frame as the
+    // same JSON shape (spec explicitly supports it during the transition).
+    `<meta name="fc:frame" content="${embedJson}" />`,
     `<meta property="og:image" content="${htmlEscape(spec.imageUrl)}" />`,
     `<meta property="og:title" content="${htmlEscape(spec.title)}" />`,
   ];
@@ -107,20 +162,6 @@ export function renderFrameHtml(spec: FrameSpec): string {
   if (spec.fallbackUrl) {
     tags.push(`<meta property="og:url" content="${htmlEscape(spec.fallbackUrl)}" />`);
   }
-  if (spec.inputPlaceholder) {
-    tags.push(`<meta property="fc:frame:input:text" content="${htmlEscape(spec.inputPlaceholder)}" />`);
-  }
-  spec.buttons.slice(0, 4).forEach((b, i) => {
-    const n = i + 1;
-    tags.push(`<meta property="fc:frame:button:${n}" content="${htmlEscape(b.label)}" />`);
-    tags.push(`<meta property="fc:frame:button:${n}:action" content="${b.action}" />`);
-    if (b.target) {
-      tags.push(`<meta property="fc:frame:button:${n}:target" content="${htmlEscape(b.target)}" />`);
-    }
-    if (b.postUrl) {
-      tags.push(`<meta property="fc:frame:button:${n}:post_url" content="${htmlEscape(b.postUrl)}" />`);
-    }
-  });
 
   const body = renderFallbackBody(spec);
 
@@ -176,24 +217,21 @@ function frameQuestionTitle(market: MarketRow): string {
 }
 
 export function renderInitialFrame(market: MarketRow): string {
+  // Mini App embed spec allows ONE button — the in-cast OVER/UNDER grid
+  // from Frames v1 is gone. The button launches the dApp page where the
+  // full stake UI lives (wallet connect, side toggle, EIP-3009 sig). The
+  // sign/submit API routes stay live for any older clients still using
+  // the v1 tx flow but are no longer the primary surface.
   return renderFrameHtml({
     imageUrl: imageUrlFor(market.address),
     title: frameQuestionTitle(market),
     description: "Stake OVER or UNDER · gasless USDT0 on X Layer",
     fallbackUrl: marketFallbackUrl(market.address),
-    inputPlaceholder: "Amount in USDT0 (e.g. 5)",
     buttons: [
       {
-        label: "Stake OVER",
-        action: "tx",
-        target: signUrlFor(market.address, 1),
-        postUrl: submitUrlFor(market.address, 1),
-      },
-      {
-        label: "Stake UNDER",
-        action: "tx",
-        target: signUrlFor(market.address, 2),
-        postUrl: submitUrlFor(market.address, 2),
+        label: "Stake on this market",
+        action: "link",
+        target: marketFallbackUrl(market.address),
       },
     ],
   });
@@ -233,14 +271,9 @@ export function renderClosedMarketFrame(market: MarketRow): string {
     fallbackUrl: marketFallbackUrl(market.address),
     buttons: [
       {
-        label: "Open on regista11.xyz",
+        label: "Open market",
         action: "link",
         target: marketFallbackUrl(market.address),
-      },
-      {
-        label: "View on OKLink",
-        action: "link",
-        target: `https://www.oklink.com/x-layer/address/${market.address}`,
       },
     ],
   });

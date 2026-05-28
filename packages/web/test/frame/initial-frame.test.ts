@@ -76,24 +76,26 @@ describe("GET /frame/[market] — initial frame", () => {
     expect(res.headers.get("content-type")).toMatch(/text\/html/);
   });
 
-  it("HTML contains fc:frame=vNext meta tag", async () => {
+  it("HTML contains fc:miniapp meta tag with v=1 embed JSON", async () => {
     const res = await callGet(MARKET_ADDR);
     const html = await res.text();
-    expect(html).toMatch(/<meta property="fc:frame" content="vNext"/);
+    const match = html.match(/<meta name="fc:miniapp" content="([^"]+)"/);
+    expect(match).not.toBeNull();
+    const embed = JSON.parse(
+      match![1].replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
+    ) as { version: string; button: { action: { type: string } } };
+    expect(embed.version).toBe("1");
+    expect(embed.button.action.type).toBe("launch_miniapp");
   });
 
-  it("HTML contains both OVER + UNDER buttons with tx action", async () => {
+  it("embed button launches the dApp market page (Mini App spec — single button)", async () => {
     const res = await callGet(MARKET_ADDR);
     const html = await res.text();
-    expect(html).toMatch(/<meta property="fc:frame:button:1" content="Stake OVER"/);
-    expect(html).toMatch(/<meta property="fc:frame:button:1:action" content="tx"/);
-    expect(html).toMatch(/<meta property="fc:frame:button:2" content="Stake UNDER"/);
-    expect(html).toMatch(/<meta property="fc:frame:button:2:action" content="tx"/);
-  });
-
-  it("HTML contains the USDT0 amount input placeholder", async () => {
-    const res = await callGet(MARKET_ADDR);
-    const html = await res.text();
-    expect(html).toMatch(/<meta property="fc:frame:input:text" content="Amount in USDT0/);
+    const match = html.match(/<meta name="fc:miniapp" content="([^"]+)"/)!;
+    const embed = JSON.parse(
+      match[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
+    ) as { button: { title: string; action: { url: string } } };
+    expect(embed.button.title).toMatch(/Stake/);
+    expect(embed.button.action.url).toContain(`/market/${MARKET_ADDR}`);
   });
 });

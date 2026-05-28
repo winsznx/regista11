@@ -107,7 +107,7 @@ describe("POST /api/frame/[market]/submit", () => {
     expect(res.status).toBe(400);
     expect(res.headers.get("content-type")).toMatch(/text\/html/);
     const html = await res.text();
-    expect(html).toMatch(/<meta property="fc:frame" content="vNext"/);
+    expect(html).toMatch(/<meta name="fc:miniapp" content="/);
   });
 
   it("missing cached auth → 409 error frame ('Authorization expired…')", async () => {

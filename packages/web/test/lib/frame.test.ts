@@ -31,16 +31,59 @@ const MARKET: MarketRow = {
 };
 
 describe("renderFrameHtml", () => {
-  it("emits fc:frame=vNext + image + 1.91:1 aspect ratio meta tags by default", () => {
+  it("emits fc:miniapp JSON embed (+ legacy fc:frame alias) per Mini App spec", () => {
     const html = renderFrameHtml({
       imageUrl: "https://example.com/img.png",
       title: "Test frame",
-      buttons: [{ label: "Tap", action: "post" }],
+      fallbackUrl: "https://example.com/market/0xabc",
+      buttons: [
+        { label: "Tap", action: "link", target: "https://example.com/market/0xabc" },
+      ],
     });
-    expect(html).toMatch(/<meta property="fc:frame" content="vNext"/);
-    expect(html).toMatch(/<meta property="fc:frame:image" content="https:\/\/example\.com\/img\.png"/);
-    expect(html).toMatch(/<meta property="fc:frame:image:aspect_ratio" content="1\.91:1"/);
-    expect(html).toMatch(/<meta property="fc:frame:button:1" content="Tap"/);
+
+    // Both the primary `fc:miniapp` tag and the legacy `fc:frame` alias
+    // carry the same stringified embed JSON.
+    const miniappMatch = html.match(/<meta name="fc:miniapp" content="([^"]+)"/);
+    const legacyFrameMatch = html.match(/<meta name="fc:frame" content="([^"]+)"/);
+    expect(miniappMatch).not.toBeNull();
+    expect(legacyFrameMatch).not.toBeNull();
+    expect(miniappMatch![1]).toBe(legacyFrameMatch![1]);
+
+    // Decode the HTML-escaped JSON and assert the spec-required shape.
+    const decoded = miniappMatch![1].replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+    const embed = JSON.parse(decoded) as {
+      version: string;
+      imageUrl: string;
+      button: {
+        title: string;
+        action: { type: string; name: string; url: string };
+      };
+    };
+    expect(embed.version).toBe("1");
+    expect(embed.imageUrl).toBe("https://example.com/img.png");
+    expect(embed.button.title).toBe("Tap");
+    expect(embed.button.action.type).toBe("launch_miniapp");
+    expect(embed.button.action.url).toBe("https://example.com/market/0xabc");
+  });
+
+  it("caps button title at 32 chars per Mini App spec", () => {
+    const html = renderFrameHtml({
+      imageUrl: "https://example.com/img.png",
+      title: "Long title",
+      fallbackUrl: "https://example.com/",
+      buttons: [
+        {
+          label: "A very long button label that exceeds the 32 char cap",
+          action: "link",
+          target: "https://example.com/",
+        },
+      ],
+    });
+    const match = html.match(/<meta name="fc:miniapp" content="([^"]+)"/)!;
+    const embed = JSON.parse(
+      match[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
+    ) as { button: { title: string } };
+    expect(embed.button.title.length).toBeLessThanOrEqual(32);
   });
 });
 

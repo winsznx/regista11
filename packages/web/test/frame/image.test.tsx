@@ -99,14 +99,14 @@ describe("GET /api/frame/[market]/image", () => {
     expect(imageResponseMock).toHaveBeenCalledTimes(1);
     const calledOpts = imageResponseMock.mock.calls[0]![1] as { width: number; height: number };
     expect(calledOpts.width).toBe(1200);
-    expect(calledOpts.height).toBe(630);
+    expect(calledOpts.height).toBe(800);
   });
 
-  it("renders 1200×630 for a valid market", async () => {
+  it("renders 1200×800 (3:2 per Mini App spec) for a valid market", async () => {
     await callImage(MARKET_ADDR);
     expect(imageResponseMock).toHaveBeenCalledTimes(1);
     const calledOpts = imageResponseMock.mock.calls[0]![1] as { width: number; height: number };
     expect(calledOpts.width).toBe(1200);
-    expect(calledOpts.height).toBe(630);
+    expect(calledOpts.height).toBe(800);
   });
 });
