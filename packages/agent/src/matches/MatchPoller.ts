@@ -1,6 +1,5 @@
 import type { Logger } from "pino";
 
-import { ApiFootballClient } from "./ApiFootballClient.js";
 import { diffSnapshots } from "./MatchStateDiff.js";
 import {
   DEFAULT_DIFF_OPTIONS,
@@ -10,8 +9,15 @@ import {
   type MatchSnapshot,
 } from "./types.js";
 
+/** Structural interface any provider must satisfy. Both
+ *  ApiFootballClient and FootballDataClient implement this; MatchPoller
+ *  doesn't care which one it gets. */
+export interface MatchSnapshotProvider {
+  fetchSnapshot(id: number): Promise<MatchSnapshot>;
+}
+
 export interface MatchPollerOptions {
-  client: ApiFootballClient;
+  client: MatchSnapshotProvider;
   fixtureId: number;
   intervalMs?: number;
   logger: Logger;
@@ -48,7 +54,7 @@ function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export class MatchPoller {
-  private readonly client: ApiFootballClient;
+  private readonly client: MatchSnapshotProvider;
   private readonly fixtureId: number;
   private readonly intervalMs: number;
   private readonly logger: Logger;

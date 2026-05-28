@@ -8,6 +8,7 @@ import { makePublicClient } from "../clients/publicClient.js";
 import { makeAgentWalletClient } from "../clients/walletClients.js";
 import { deriveAgentAccount } from "../wallets/AgentWallets.js";
 import { ApiFootballClient } from "../matches/ApiFootballClient.js";
+import { FootballDataClient } from "../matches/FootballDataClient.js";
 import { MatchPoller } from "../matches/MatchPoller.js";
 import { logger } from "../logger.js";
 import type { AgentIndex, PersonaName as AgentDisplayName } from "../types/agent.js";
@@ -121,11 +122,26 @@ await runAgentCli({
         parentLogger: logger,
       });
 
-      const apiClient = new ApiFootballClient({
-        apiKey: env.API_FOOTBALL_KEY,
-        baseUrl: env.API_FOOTBALL_BASE_URL,
-        logger,
-      });
+      // Live match data — pick a provider at boot. If FOOTBALL_DATA_KEY
+      // is set, use Football-Data.org (10 req/min, no daily cap, 12
+      // top-tier comps). Otherwise fall back to api-football (broader
+      // coverage but stricter quotas). Both expose fetchSnapshot(id) and
+      // return our internal MatchSnapshot — MatchPoller is provider-
+      // agnostic.
+      const fdKey = process.env.FOOTBALL_DATA_KEY?.trim();
+      const apiClient: ApiFootballClient | FootballDataClient = fdKey
+        ? new FootballDataClient({ apiKey: fdKey, logger })
+        : new ApiFootballClient({
+            apiKey: env.API_FOOTBALL_KEY,
+            baseUrl: env.API_FOOTBALL_BASE_URL,
+            logger,
+          });
+      logger.info(
+        {
+          provider: fdKey ? "football-data" : "api-football",
+        },
+        "matches: provider selected",
+      );
       const matchPoller = new MatchPoller({
         client: apiClient,
         // fixtureId is the CLI-parsed value threaded through runAgentCli.
