@@ -1,26 +1,61 @@
 {
   "name": "@regista11/x402-facilitator",
   "version": "0.1.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "test": "test"
+  "description": "X Layer EIP-3009 gasless settlement facilitator. Relays USDT0 transferWithAuthorization signatures, pays OKB gas. Built for Regista 11 — works for any X Layer dApp.",
+  "license": "MIT",
+  "author": "Regista 11 (winsznx)",
+  "homepage": "https://regista11.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/winsznx/regista11.git",
+    "directory": "packages/x402-facilitator"
   },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "test:encoding": "tsx test/encoding-roundtrip.test.ts",
-    "test:check3": "tsx test/check3-live.test.ts"
+  "bugs": {
+    "url": "https://github.com/winsznx/regista11/issues"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "x402",
+    "eip-3009",
+    "gasless",
+    "x-layer",
+    "usdt0",
+    "facilitator",
+    "transferwithauthorization",
+    "okx",
+    "stablecoin"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "prepublishOnly": "pnpm build"
+  },
   "dependencies": {
-    "@okxweb3/x402-core": "^0.1.0",
-    "@okxweb3/x402-evm": "^0.1.0",
-    "@okxweb3/x402-express": "^0.1.0",
-    "express": "^5.2.1",
-    "tsx": "^4.22.3",
     "viem": "^2.50.4"
+  },
+  "peerDependencies": {
+    "viem": ">=2.30.0 <3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
