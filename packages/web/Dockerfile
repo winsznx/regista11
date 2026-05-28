@@ -17,8 +17,12 @@ COPY packages/contracts/package.json packages/contracts/
 RUN pnpm install --frozen-lockfile --filter @regista11/web...
 
 COPY packages/web /app/packages/web
-COPY packages/contracts/out /app/packages/contracts/out
-COPY packages/contracts/deployments /app/packages/contracts/deployments
+
+# packages/contracts/out and packages/contracts/deployments are NOT
+# copied — ABIs are inlined in packages/web/src/abis/*.ts at sync-abis
+# time, and deployment addresses are read from runtime env (FACTORY_ADDRESS).
+# Adding those COPY lines back will break the build whenever those dirs
+# are empty (e.g. pre-broadcast).
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @regista11/web build

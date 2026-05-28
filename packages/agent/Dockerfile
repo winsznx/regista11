@@ -22,10 +22,13 @@ RUN pnpm install --frozen-lockfile --filter @regista11/agent...
 
 # Source.
 COPY packages/agent /app/packages/agent
-# Compiled contract artifacts (ABIs the agent reads at runtime).
-COPY packages/contracts/out /app/packages/contracts/out
-# Optional deployment artifact — agent loads on startup if present.
-COPY packages/contracts/deployments /app/packages/contracts/deployments
+
+# ABIs are inlined as TS constants in packages/agent/src/contracts/abis/,
+# so packages/contracts/out is not required at build time. Deployment
+# addresses come from the FACTORY_ADDRESS env var at runtime (set in
+# Railway after contracts broadcast). The legacy COPY of
+# packages/contracts/{out,deployments} was removed because both dirs are
+# gitignored and absent in fresh checkouts, which would break the build.
 
 # Generate Prisma client + compile TS → dist.
 RUN pnpm --filter @regista11/agent exec prisma generate \
@@ -40,8 +43,6 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/packages/agent ./packages/agent
-COPY --from=builder /app/packages/contracts/out ./packages/contracts/out
-COPY --from=builder /app/packages/contracts/deployments ./packages/contracts/deployments
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/agent/node_modules ./packages/agent/node_modules
 
