@@ -13,10 +13,18 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
+/* §8.1.5 Signature decorative dot grid. iOS Safari's combo of body
+   background-attachment: fixed + backdrop-filter elsewhere locks page
+   scroll on touch, so the pattern is painted onto a fixed pseudo-
+   element layered behind content instead of the body background. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
   background-image: radial-gradient(circle at 1px 1px, rgba(17, 26, 74, 0.04) 1px, transparent 0);
   background-size: 24px 24px;
-  background-attachment: fixed;
+  pointer-events: none;
 }
 
 /* Focus ring — §8.9: 2px Action Orange ring, 2px offset, keyboard only. */

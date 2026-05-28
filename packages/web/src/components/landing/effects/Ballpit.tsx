@@ -325,10 +325,14 @@ function S(e) {
         document.body.addEventListener("pointerleave", L);
         document.body.addEventListener("click", C);
 
-        document.body.addEventListener("touchstart", TouchStart, { passive: false });
-        document.body.addEventListener("touchmove", TouchMove, { passive: false });
-        document.body.addEventListener("touchend", TouchEnd, { passive: false });
-        document.body.addEventListener("touchcancel", TouchEnd, { passive: false });
+        // passive: true — we read touch coords for the hover effect but
+        // must NOT preventDefault, otherwise the body listener swallows
+        // the page's scroll gesture on mobile (the hero takes 100vh, so
+        // every touch on the hero would otherwise lock the page).
+        document.body.addEventListener("touchstart", TouchStart, { passive: true });
+        document.body.addEventListener("touchmove", TouchMove, { passive: true });
+        document.body.addEventListener("touchend", TouchEnd, { passive: true });
+        document.body.addEventListener("touchcancel", TouchEnd, { passive: true });
 
         R = true;
       }
@@ -397,7 +401,8 @@ function L() {
 
 function TouchStart(e) {
   if (e.touches.length > 0) {
-    e.preventDefault();
+    // intentionally NOT preventDefault — listener is passive so scroll
+    // gestures pass through to the page (see addEventListener above)
     A.x = e.touches[0].clientX;
     A.y = e.touches[0].clientY;
 
@@ -418,7 +423,8 @@ function TouchStart(e) {
 
 function TouchMove(e) {
   if (e.touches.length > 0) {
-    e.preventDefault();
+    // intentionally NOT preventDefault — listener is passive so scroll
+    // gestures pass through to the page (see addEventListener above)
     A.x = e.touches[0].clientX;
     A.y = e.touches[0].clientY;
 

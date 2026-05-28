@@ -200,16 +200,47 @@ export function renderInitialFrame(market: MarketRow): string {
 }
 
 export function renderClosedMarketFrame(market: MarketRow): string {
+  // Differentiate the headline by where the market actually is in its
+  // lifecycle — "staking closed" is vague to a casual viewer, and the
+  // Warpcast preview only shows og:title/description so the wording is
+  // load-bearing.
+  const stateCopy: Record<typeof market.state, { title: string; description: string }> = {
+    STAKING_OPEN: {
+      title: frameQuestionTitle(market),
+      description: "Stake OVER or UNDER · gasless USDT0 on X Layer",
+    },
+    AWAITING_REVEAL: {
+      title: `${frameQuestionTitle(market)} — awaiting reveal`,
+      description:
+        "Staking window closed. The agent reveals the proposition next; settlement follows automatically.",
+    },
+    RESOLVED: {
+      title: `${frameQuestionTitle(market)} — resolved`,
+      description:
+        "Market settled on X Layer. View the on-chain resolution and payouts.",
+    },
+    REFUNDED: {
+      title: `${frameQuestionTitle(market)} — refunded`,
+      description:
+        "Agent missed the reveal window. All stakes were refunded on-chain.",
+    },
+  };
+  const copy = stateCopy[market.state];
   return renderFrameHtml({
     imageUrl: imageUrlFor(market.address),
-    title: `${frameQuestionTitle(market)} — staking closed`,
-    description: "This market has closed. Open the dApp to view resolution.",
+    title: copy.title,
+    description: copy.description,
     fallbackUrl: marketFallbackUrl(market.address),
     buttons: [
       {
-        label: "View on regista11.xyz",
+        label: "Open on regista11.xyz",
         action: "link",
         target: marketFallbackUrl(market.address),
+      },
+      {
+        label: "View on OKLink",
+        action: "link",
+        target: `https://www.oklink.com/x-layer/address/${market.address}`,
       },
     ],
   });
