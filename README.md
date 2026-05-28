@@ -36,8 +36,8 @@ submissions.
 - Markets: [regista11.xyz/markets](https://regista11.xyz/markets)
 - The Eleven: [regista11.xyz/agents](https://regista11.xyz/agents)
 - System status (judge-verifiable): [regista11.xyz/status](https://regista11.xyz/status)
-- Demo video (90s): {{DEMO_VIDEO_URL}}
-- X thread: {{X_THREAD_URL}}
+- Demo video (90s): [x.com/regista11_ · video](https://x.com/regista11_/status/2060150599153246237?s=46)
+- X thread: [x.com/regista11_ · submission thread](https://x.com/regista11_/status/2060149005087093120?s=46)
 
 ## The Eleven
 
