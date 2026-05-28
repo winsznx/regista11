@@ -3,58 +3,66 @@ import Link from "next/link";
 import { Code2, MessageSquare, FileText } from "lucide-react";
 
 import { Container } from "./Container";
-import { HairlineRule } from "./HairlineRule";
-import { RegistaMark } from "@/icons/RegistaMark";
 
+/**
+ * One cohesive dark footer:
+ *   - Big Regista 11 wordmark at the top (next/image — AVIF/WebP variants
+ *     from the 3.3 MB source, lazy-loaded as the footer scrolls in)
+ *   - Three-column links / submission grid below
+ *   - Hairline rule + © + URL row at the bottom
+ *
+ * Everything sits on the deep-plum gradient — no light-vs-dark seam
+ * before the footer. The CTA section above ends on deep-plum too, so
+ * the dark color continues unbroken from the trophy band into here.
+ */
 export function Footer() {
   return (
-    <footer className="mt-12 border-t border-[var(--color-steel-gray)] bg-[var(--color-fog-gray)]">
-      {/* Brand stamp — full-bleed dark band hosting the Regista 11 wordmark
-          PNG. Next/image converts the 3.3 MB source to AVIF/WebP variants
-          at 4 widths (sizes attr below) and lazy-loads when the footer
-          scrolls into view — the original PNG is never sent to a browser. */}
-      <div className="relative isolate overflow-hidden border-b border-white/5"
-           style={{ background: "linear-gradient(180deg, #05070f 0%, #0a0d1f 100%)" }}>
-        <Container>
-          <div className="relative mx-auto flex h-[180px] w-full max-w-[640px] items-center justify-center md:h-[240px]">
-            <Image
-              src="/landing/regista11-logo.png"
-              alt="Regista 11"
-              fill
-              quality={88}
-              sizes="(min-width: 768px) 640px, 90vw"
-              className="object-contain"
-              loading="lazy"
-              priority={false}
-            />
-          </div>
-        </Container>
-      </div>
+    <footer
+      className="relative isolate overflow-hidden border-t border-white/5 text-[var(--color-ghost-white)]"
+      style={{
+        background:
+          "linear-gradient(180deg, #05070f 0%, #0a0d1f 60%, #050710 100%)",
+      }}
+    >
       <Container>
-        <div className="grid gap-10 py-12 md:grid-cols-3 md:gap-8">
+        {/* Hero wordmark — proper breathing room, never crops */}
+        <div className="relative mx-auto flex h-[200px] w-full max-w-[680px] items-center justify-center pt-16 md:h-[280px] md:pt-20">
+          <Image
+            src="/landing/regista11-logo.png"
+            alt="Regista 11"
+            fill
+            quality={88}
+            sizes="(min-width: 768px) 680px, 90vw"
+            className="object-contain"
+            loading="lazy"
+            priority={false}
+          />
+        </div>
+
+        {/* Three-column grid — inverted text colors for the dark surface */}
+        <div className="grid gap-10 pt-12 pb-10 md:grid-cols-3 md:gap-12 md:pt-16 md:pb-14">
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-[var(--color-deep-plum)]">
-              <RegistaMark />
-              <span className="text-sm font-medium uppercase tracking-[0.18em]">
-                Regista 11
-              </span>
-            </div>
-            <p className="max-w-xs text-[14px] text-[var(--color-slate-text)]">
-              Live football prop markets, made by AI agents.
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+              Protocol
+            </h2>
+            <p className="max-w-xs text-[14px] leading-[1.55] text-white/75">
+              Live football prop markets, made by AI agents. Permissionless
+              and gasless on X Layer mainnet.
             </p>
-            <span className="inline-flex items-center gap-2 rounded-[2px] border border-[var(--color-steel-gray)] bg-white px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[var(--color-slate-text)]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-action-orange)]/40 bg-[var(--color-action-orange)]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-action-orange)] backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-action-orange)]" />
               Live on X Layer mainnet
             </span>
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-[10px] uppercase tracking-[0.18em] text-[var(--color-slate-text)]">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
               Links
             </h2>
-            <ul className="space-y-2 text-[14px]">
+            <ul className="space-y-2.5 text-[14px]">
               <li>
                 <Link
-                  className="inline-flex items-center gap-2 text-[var(--color-charcoal-text)] hover:text-[var(--color-deep-plum)]"
+                  className="inline-flex items-center gap-2 text-white/85 transition-colors hover:text-[var(--color-action-orange)]"
                   href="/docs"
                 >
                   <FileText className="h-4 w-4" /> Docs
@@ -62,7 +70,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  className="inline-flex items-center gap-2 text-[var(--color-charcoal-text)] hover:text-[var(--color-deep-plum)]"
+                  className="inline-flex items-center gap-2 text-white/85 transition-colors hover:text-[var(--color-action-orange)]"
                   href="https://github.com/winsznx/regista11"
                   target="_blank"
                   rel="noreferrer"
@@ -72,7 +80,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  className="inline-flex items-center gap-2 text-[var(--color-charcoal-text)] hover:text-[var(--color-deep-plum)]"
+                  className="inline-flex items-center gap-2 text-white/85 transition-colors hover:text-[var(--color-action-orange)]"
                   href="https://x.com/regista11_"
                   target="_blank"
                   rel="noreferrer"
@@ -84,28 +92,32 @@ export function Footer() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-[10px] uppercase tracking-[0.18em] text-[var(--color-slate-text)]">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
               Submission
             </h2>
-            <p className="text-[14px] text-[var(--color-charcoal-text)]">
+            <p className="text-[14px] leading-[1.55] text-white/85">
               Built for{" "}
-              <span className="text-[var(--color-deep-plum)]">OKX X Cup</span>{" "}
+              <span className="text-[var(--color-action-orange)]">
+                OKX X Cup
+              </span>{" "}
               ×{" "}
-              <span className="text-[var(--color-deep-plum)]">
+              <span className="text-[var(--color-action-orange)]">
                 Hook the Future
               </span>{" "}
               × Flap.
             </p>
-            <p className="font-numerals text-[12px] text-[var(--color-slate-text)]">
+            <p className="font-numerals text-[12px] text-white/55">
               @XLayerOfficial · @Uniswap · @flapdotsh · #BuildX
             </p>
           </div>
         </div>
 
-        <HairlineRule />
-        <div className="flex flex-col gap-2 py-6 text-[12px] text-[var(--color-slate-text)] md:flex-row md:items-center md:justify-between">
-          <span>© 2026 Regista 11. MIT License.</span>
-          <span>regista11.xyz</span>
+        {/* Bottom strip */}
+        <div className="border-t border-white/10">
+          <div className="flex flex-col gap-2 py-6 text-[12px] text-white/55 md:flex-row md:items-center md:justify-between">
+            <span>© 2026 Regista 11. MIT License.</span>
+            <span>regista11.xyz</span>
+          </div>
         </div>
       </Container>
     </footer>
