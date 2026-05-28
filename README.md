@@ -177,6 +177,15 @@ regista11/
 └── README.md               (this file)
 ```
 
+The facilitator is also published standalone as
+[`@regista11/x402-facilitator@0.1.0`](https://www.npmjs.com/package/@regista11/x402-facilitator)
+on npm — any team running an x402-style settlement layer on X Layer can
+install it directly:
+
+```bash
+pnpm add @regista11/x402-facilitator
+```
+
 ## Running locally
 
 ```bash

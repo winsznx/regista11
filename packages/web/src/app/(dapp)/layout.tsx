@@ -4,6 +4,7 @@ import { Footer } from "@/components/layout/Footer";
 import { DAppNavBar } from "@/components/dapp/DAppNavBar";
 import { BottomTabBar } from "@/components/dapp/BottomTabBar";
 import { WrongChainBanner } from "@/components/dapp/WrongChainBanner";
+import { MiniAppReadySignal } from "@/components/dapp/MiniAppReadySignal";
 import { Providers } from "@/app/providers";
 
 /**
@@ -17,6 +18,7 @@ import { Providers } from "@/app/providers";
 export default function DAppLayout({ children }: { children: ReactNode }) {
   return (
     <Providers>
+      <MiniAppReadySignal />
       <DAppNavBar />
       <WrongChainBanner />
       <main className="min-h-[calc(100vh-4rem-1px)] pb-24 md:pb-0">
