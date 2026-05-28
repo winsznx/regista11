@@ -28,7 +28,7 @@ export class IlBomber extends BaseAgent {
     minMinute: 0,
     maxMinute: 90,
     maxMarketsPerMatch: 3,
-    defaultMarketWindowMs: 60_000,
+    defaultMarketWindowMs: 300_000, // 5min — salt mining + RPC submit can exceed 60s on Railway's CPU
     defaultResolveWindowMs: 30 * 60_000,
   };
 
