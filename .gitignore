@@ -14,7 +14,9 @@ dist/
 cache/
 out/
 broadcast/
-lib/
+# Foundry library submodules only — anchored so the rule doesn't match
+# packages/web/src/lib/ or any other "lib" directory in the tree.
+/packages/contracts/lib/
 
 packages/contracts/.cache/
 packages/contracts/lcov.info
