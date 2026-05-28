@@ -54,8 +54,8 @@ COPY --from=builder /app/packages/agent/node_modules ./packages/agent/node_modul
 EXPOSE 8080
 
 # FIXTURE_ID is set as a Railway env var so we can flip matches without
-# rebuilding the image. Falls back to a placeholder so the container at
-# least logs a useful "missing fixture id" error if the var isn't set.
-ENV FIXTURE_ID=0
+# rebuilding the image. NO `ENV FIXTURE_ID=` default — a stale Dockerfile
+# default would shadow a missing Railway value with 0, which API-Football
+# rejects ("Id cannot be 0"). Better to crash loud on a missing fixture.
 
 CMD ["sh", "-c", "node packages/agent/dist/core/cli-entry.js \"$FIXTURE_ID\" --persona=all"]

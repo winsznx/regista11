@@ -90,7 +90,7 @@ await runAgentCli({
   deps: {
     env: process.env,
     logger,
-    buildTickLoop: async (persona: CliPersona) => {
+    buildTickLoop: async (persona: CliPersona, fixtureId: number) => {
       const env = loadEnv();
       const deployment = loadDeployment();
       if (!deployment) {
@@ -128,7 +128,12 @@ await runAgentCli({
       });
       const matchPoller = new MatchPoller({
         client: apiClient,
-        fixtureId: 0,
+        // fixtureId is the CLI-parsed value threaded through runAgentCli.
+        // Previously hard-coded to 0, which caused every API-Football
+        // request to hit `?id=0` and burn the rate-limit budget without
+        // pulling real match data — the agent appeared online but no
+        // markets ever minted.
+        fixtureId,
         intervalMs: env.MATCH_POLL_INTERVAL_MS,
         logger,
       });

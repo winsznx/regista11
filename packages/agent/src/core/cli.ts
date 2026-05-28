@@ -38,12 +38,16 @@ export const PERSONA_WALLET_INDEX: Record<PersonaSlug | "stub", number> = {
 
 export interface AgentCliArgs {
   fixtureId: number;
-  persona: CliPersona;
+  /** Either a single CliPersona, "all", or a comma-separated list of
+   *  PersonaSlug values for "run this subset only" mode (used to keep
+   *  the agent under API-Football's free-tier 10 req/min while still
+   *  showing live mints for a demo). */
+  persona: CliPersona | readonly PersonaSlug[];
 }
 
 export function parseAgentCliArgs(argv: readonly string[]): AgentCliArgs {
   const rest = argv.slice(2);
-  let persona: CliPersona = "ilRegista";
+  let persona: AgentCliArgs["persona"] = "ilRegista";
   const positional: string[] = [];
 
   for (let i = 0; i < rest.length; i++) {
@@ -51,10 +55,10 @@ export function parseAgentCliArgs(argv: readonly string[]): AgentCliArgs {
     if (token === "--persona") {
       const value = rest[i + 1];
       if (!value) throw new Error("--persona requires a value");
-      persona = validatePersona(value);
+      persona = validatePersonaArg(value);
       i++;
     } else if (token.startsWith("--persona=")) {
-      persona = validatePersona(token.slice("--persona=".length));
+      persona = validatePersonaArg(token.slice("--persona=".length));
     } else if (!token.startsWith("-")) {
       positional.push(token);
     }
@@ -83,9 +87,38 @@ function validatePersona(value: string): CliPersona {
   return value as CliPersona;
 }
 
+/** Accepts either a single CliPersona value ("all", "stub", or any
+ *  PERSONA_SLUGS member) or a comma-separated list of PERSONA_SLUGS
+ *  members (e.g. "ilRegista,ilBomber,lUltimo") for the demo-subset
+ *  mode. */
+function validatePersonaArg(value: string): AgentCliArgs["persona"] {
+  if (!value.includes(",")) return validatePersona(value);
+  const parts = value
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  if (parts.length === 0) {
+    throw new Error("--persona list cannot be empty");
+  }
+  const slugs = parts.map((p) => {
+    if (!(PERSONA_SLUGS as readonly string[]).includes(p)) {
+      throw new Error(
+        `invalid persona slug '${p}' in list; expected one of: ${PERSONA_SLUGS.join(", ")}`,
+      );
+    }
+    return p as PersonaSlug;
+  });
+  // De-dupe while preserving order.
+  const unique = Array.from(new Set(slugs)) as PersonaSlug[];
+  return unique;
+}
+
 /** Expand --persona=all into the full list of real persona slugs. */
-export function expandCliPersona(p: CliPersona): readonly CliPersona[] {
-  return p === "all" ? [...PERSONA_SLUGS] : [p];
+export function expandCliPersona(
+  p: AgentCliArgs["persona"],
+): readonly CliPersona[] {
+  if (Array.isArray(p)) return p as readonly CliPersona[];
+  return p === "all" ? [...PERSONA_SLUGS] : [p as CliPersona];
 }
 
 /** Look up the registry entry for a non-stub, non-all slug. Throws on misuse. */
@@ -99,8 +132,13 @@ export interface AgentCliDeps {
   env: NodeJS.ProcessEnv;
   logger: Logger;
   /** Builds one tick loop per persona slug. cli-entry.ts wires wallet,
-   *  publicClient, factoryAddress, etc. for a single persona at a time. */
-  buildTickLoop: (persona: CliPersona) => Promise<{ agent: BaseAgent; tickLoop: TickLoop }>;
+   *  publicClient, factoryAddress, etc. for a single persona at a time.
+   *  fixtureId is threaded through so MatchPoller receives the CLI-
+   *  parsed value at construction instead of a placeholder. */
+  buildTickLoop: (
+    persona: CliPersona,
+    fixtureId: number,
+  ) => Promise<{ agent: BaseAgent; tickLoop: TickLoop }>;
 }
 
 export async function runAgentCli(args: {
@@ -118,7 +156,7 @@ export async function runAgentCli(args: {
 
   const loops: Array<{ agent: BaseAgent; tickLoop: TickLoop }> = [];
   for (const p of personasToRun) {
-    const built = await args.deps.buildTickLoop(p);
+    const built = await args.deps.buildTickLoop(p, fixtureId);
     loops.push(built);
     args.deps.logger.info(
       {
