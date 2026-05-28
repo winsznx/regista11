@@ -1,6 +1,6 @@
 {
   "name": "@regista11/x402-facilitator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "X Layer EIP-3009 gasless settlement facilitator. Relays USDT0 transferWithAuthorization signatures, pays OKB gas. Built for Regista 11 — works for any X Layer dApp.",
   "license": "MIT",
   "author": "Regista 11 (winsznx)",

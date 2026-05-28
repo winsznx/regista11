@@ -32,35 +32,38 @@ import {
   XLayerFacilitatorClient,
   USDT0_ADDRESS,
 } from "@regista11/x402-facilitator";
-import { createWalletClient, createPublicClient, http } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { xLayer } from "viem/chains";
 
-const account = privateKeyToAccount(process.env.RELAYER_PRIVATE_KEY as `0x${string}`);
-
-const publicClient = createPublicClient({ chain: xLayer, transport: http() });
-const walletClient = createWalletClient({ chain: xLayer, transport: http(), account });
-
+// The facilitator owns the OKB-funded relayer key and builds its own
+// viem clients internally from rpcUrl + facilitatorPrivateKey.
 const facilitator = new XLayerFacilitatorClient({
-  publicClient,
-  walletClient,
-  usdt0Address: USDT0_ADDRESS,
+  rpcUrl: "https://rpc.xlayer.tech",
+  facilitatorPrivateKey: process.env.RELAYER_PRIVATE_KEY as `0x${string}`,
 });
 
-// The user signs this typed-data in their wallet (the EIP-712 payload
-// is what xLayerFacilitator.buildTypedData() returns — match the
-// `domain.name` exactly: "USD₮0" with U+20AE).
-const result = await facilitator.relayTransfer({
-  from: "0x…",
-  to: "0x…",
-  value: 5_000_000n, // 6-decimal USDT0 micros → $5.00
-  validAfter: 0n,
-  validBefore: BigInt(Math.floor(Date.now() / 1000) + 300),
-  nonce: "0x…",     // 32 bytes
-  signature: "0x…", // 65 bytes — v, r, s concatenated
-});
+// x402 "exact" scheme verbs. The user signs the EIP-712 payload in their
+// wallet (match `domain.name` exactly: "USD₮0" with U+20AE). The signed
+// authorization rides inside payload.payload; requirements is the x402
+// payment requirement.
+const payload = {
+  payload: {
+    authorization: {
+      from: "0x…",
+      to: "0x…",
+      value: "5000000",          // 6-decimal USDT0 micros → $5.00
+      validAfter: "0",
+      validBefore: String(Math.floor(Date.now() / 1000) + 300),
+      nonce: "0x…",              // 32 bytes
+    },
+    signature: "0x…",           // 65 bytes — v, r, s concatenated
+  },
+};
+const requirements = { payTo: "0x…", amount: "5000000", asset: USDT0_ADDRESS };
 
-console.log("tx hash:", result.transactionHash);
+const verdict = await facilitator.verify(payload, requirements);
+if (verdict.isValid) {
+  const result = await facilitator.settle(payload, requirements);
+  console.log("tx hash:", result.transaction); // { success, status, transaction, network, amount, ... }
+}
 ```
 
 ## EIP-712 typed-data the user signs
@@ -100,8 +103,8 @@ The constant `USDT0_DOMAIN_NAME` is exported so you don't have to hand-type the 
 
 | Name | Kind | What |
 |---|---|---|
-| `XLayerFacilitatorClient` | class | The main client — `relayTransfer()`, `verifyAuthorization()` |
-| `XLayerFacilitatorConfig` | type | Constructor config |
+| `XLayerFacilitatorClient` | class | The main client — x402 verbs `verify()`, `settle()`, plus `getSupported()`, `getSettleStatus()` |
+| `XLayerFacilitatorConfig` | type | Constructor config (`rpcUrl?`, `facilitatorPrivateKey`) |
 | `TransferAuthorization` | type | EIP-3009 authorization struct |
 | `computeDomainSeparator()` | function | Computes the USDT0 domain separator |
 | `recoverTransferSigner()` | function | Recovers the signer address from an EIP-3009 signature |

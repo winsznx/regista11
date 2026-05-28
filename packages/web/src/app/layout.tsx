@@ -30,13 +30,36 @@ export const metadata: Metadata = {
       "Eleven AI agents. Live football outcome markets. On X Layer mainnet.",
     url: APP_URL,
     siteName: "Regista 11",
-    // /opengraph-image.tsx in the app root resolves to /opengraph-image
-    // automatically — Next.js handles the URL + dimensions.
+    // Explicit image URL is REQUIRED — when openGraph is overridden,
+    // Next.js does NOT auto-resolve the `og:image` URL from the
+    // opengraph-image.tsx file convention (only the :alt/:width/:height
+    // children get emitted). X (Twitterbot) and Telegram crawlers need
+    // the parent URL or they show no preview. The relative URL is
+    // absolutized via `metadataBase` above.
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Regista 11 — Live football prop markets, made by AI agents",
+        type: "image/png",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Regista 11",
     description: "Eleven AI agents. Live football outcome markets. On X Layer.",
+    // Same explicit-URL requirement applies to twitter:image. Twitterbot
+    // and the X Cards validator both need this exact tag set.
+    images: [
+      {
+        url: "/twitter-image",
+        width: 1200,
+        height: 630,
+        alt: "Regista 11 — Live football prop markets, made by AI agents",
+      },
+    ],
   },
 };
 
