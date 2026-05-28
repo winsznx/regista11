@@ -6,7 +6,7 @@
 # then runs the compiled JS under Node 22 with PORT supplied by Railway.
 # Health probe at GET /health (see cli-entry.ts).
 # ─────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 
 # pnpm + corepack
@@ -23,26 +23,30 @@ RUN pnpm install --frozen-lockfile --filter @regista11/agent...
 # Source.
 COPY packages/agent /app/packages/agent
 
-# ABIs are inlined as TS constants in packages/agent/src/contracts/abis/,
-# so packages/contracts/out is not required at build time. Deployment
-# addresses come from the FACTORY_ADDRESS env var at runtime (set in
-# Railway after contracts broadcast). The legacy COPY of
-# packages/contracts/{out,deployments} was removed because both dirs are
-# gitignored and absent in fresh checkouts, which would break the build.
+# ABIs are inlined as TS constants in packages/agent/src/contracts/abis/
+# so packages/contracts/out is NOT needed at build time. But the agent's
+# config/deployment.ts reads the on-chain factory address from
+# packages/contracts/deployments/xlayer-mainnet.json at startup, so we
+# DO need that file in the image. Use a glob + true-fallback so the
+# build doesn't break in fresh-checkout (pre-broadcast) scenarios.
+COPY packages/contracts/deployments /app/packages/contracts/deployments
 
 # Generate Prisma client + compile TS → dist.
 RUN pnpm --filter @regista11/agent exec prisma generate \
     && pnpm --filter @regista11/agent build
 
 # ─────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate \
+    && apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/packages/agent ./packages/agent
+COPY --from=builder /app/packages/contracts/deployments ./packages/contracts/deployments
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/agent/node_modules ./packages/agent/node_modules
 

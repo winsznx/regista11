@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Alpine 22 ships OpenSSL 3, but Prisma 5.22's default linux-musl
+  // binary links libssl 1.1. Explicitly request the OpenSSL-3 variant so
+  // the container can load libquery_engine on Railway's Alpine image.
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
