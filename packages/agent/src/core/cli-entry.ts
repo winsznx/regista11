@@ -91,6 +91,11 @@ await runAgentCli({
   deps: {
     env: process.env,
     logger,
+    // Fires after every tick loop has started — the only point in the
+    // boot path that races ahead of runAgentCli's signal-await.
+    onReady: () => {
+      healthState.status = "ok";
+    },
     buildTickLoop: async (persona: CliPersona, fixtureId: number) => {
       const env = loadEnv();
       const deployment = loadDeployment();
@@ -160,7 +165,6 @@ await runAgentCli({
   },
 }).then(
   (code) => {
-    healthState.status = "ok";
     process.exit(code);
   },
   (err) => {
@@ -168,5 +172,3 @@ await runAgentCli({
     process.exit(1);
   },
 );
-
-healthState.status = "ok";

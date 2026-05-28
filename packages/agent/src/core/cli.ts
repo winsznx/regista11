@@ -139,6 +139,12 @@ export interface AgentCliDeps {
     persona: CliPersona,
     fixtureId: number,
   ) => Promise<{ agent: BaseAgent; tickLoop: TickLoop }>;
+  /** Fired once every tick loop has started. The caller blocks on
+   *  runAgentCli's promise (which only resolves on SIGINT/SIGTERM), so
+   *  anything that needs to know "boot done, agent now ticking" — like
+   *  flipping a health endpoint from "starting" to "ok" — must run from
+   *  this callback rather than after the await. */
+  onReady?: () => void;
 }
 
 export async function runAgentCli(args: {
@@ -170,6 +176,8 @@ export async function runAgentCli(args: {
   }
 
   await Promise.all(loops.map(({ tickLoop }) => tickLoop.start(fixtureId)));
+
+  args.deps.onReady?.();
 
   return await new Promise<number>((resolve) => {
     const onSig = () => {
