@@ -100,10 +100,14 @@ export function MarketsListView({ status, persona, onClearFilters }: MarketsList
   }
 
   if (error) {
+    // Truncate raw RPC error bodies — the X Layer RPC echoes back the
+    // full request payload in the message, which floods the UI. Keep
+    // the first line / short hint only.
+    const friendly = String(error).split("\n")[0]?.slice(0, 140) ?? "RPC read failed";
     return (
       <EmptyState
         title="Unable to load markets."
-        body={`Read failed: ${error}. Check the X Layer RPC at https://rpc.xlayer.tech and retry.`}
+        body={`${friendly}. Refresh to retry — X Layer RPC may be rate-limited briefly.`}
       />
     );
   }

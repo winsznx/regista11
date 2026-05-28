@@ -38,7 +38,11 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 const CACHE = new Map<string, CacheEntry<unknown>>();
-const TTL_MS = 15_000;
+// Bumped from 15s after the chunked getLogs scan started hitting X Layer
+// RPC rate limits — re-scanning the same window every 15s blew the
+// per-second budget for free public RPC. 60s is comfortable for the
+// /markets list which refreshes on user interaction anyway.
+const TTL_MS = 60_000;
 
 async function cached<T>(key: string, loader: () => Promise<T>): Promise<T> {
   const now = Date.now();
@@ -74,19 +78,20 @@ export async function getFactoryMarkets(): Promise<FactoryMarketEvent[]> {
   return cached(`factory-markets:${WEB_DEPLOYMENT.factory}:${fromBlock}`, async () => {
     const client = getPublicClient();
 
-    // X Layer's RPC caps a single eth_getLogs request to a 100-block
-    // window. The factory was deployed at block ~61M and current head
-    // is millions of blocks higher — a naive single call fails with
-    // "block range greater than 100 max."
+    // X Layer's free RPC enforces TWO constraints on eth_getLogs:
+    //   1. Each call's block range must be ≤ 100 blocks ("over 100 max")
+    //   2. Aggregate calls per second are rate-limited ("over rate limit")
     //
-    // Strategy: cap the scan to the most recent LOOKBACK_BLOCKS (~28h
-    // at X Layer's ~2s block time), chunk into 100-block windows, and
-    // fetch in parallel batches. Markets older than that aren't shown
-    // here (judges/users can find them via OKLink) — the deep-link
-    // /market/[address] still works for any address regardless of age.
+    // We satisfy (1) by chunking into 100-block windows. We satisfy (2)
+    // by capping the scan depth to MAX_CHUNKS × 100 blocks (~2.8h at
+    // X Layer's ~2s block time) and walking the chunks with low
+    // parallelism + a 429-retry with backoff. The 60s cache (above)
+    // absorbs repeat reads. Markets minted earlier than the scan window
+    // remain reachable via the deep-link /market/[address] page.
     const CHUNK = 100n;
-    const PARALLEL = 8;
-    const LOOKBACK_BLOCKS = 50_000n;
+    const PARALLEL = 3;
+    const MAX_CHUNKS = 50;
+    const LOOKBACK_BLOCKS = BigInt(MAX_CHUNKS) * CHUNK; // 5_000
     const latest = await client.getBlockNumber();
     const scanFrom = fromBlock > latest - LOOKBACK_BLOCKS
       ? fromBlock
@@ -98,23 +103,47 @@ export async function getFactoryMarkets(): Promise<FactoryMarketEvent[]> {
       ranges.push({ from: cursor, to: to > latest ? latest : to });
     }
 
-    // Inferred element type carries the decoded `args` because we pass
-    // a typed `event:` arg below — typing the accumulator explicitly
-    // would lose that narrowing. Build via Promise.all batches and flat.
-    const batches = [];
+    // Type carrier: one successful call's return type carries decoded
+    // `args` because we pass the typed `event:` arg below. Using the
+    // inferred type as the chunk-result type preserves that narrowing.
+    type ChunkResult = Awaited<
+      ReturnType<typeof client.getLogs<typeof MARKET_CREATED_EVENT>>
+    >;
+
+    // Fetch with bounded parallelism + 429-aware retry. A single chunk
+    // failing is non-fatal — we collect the rest. This trades some
+    // completeness for resilience against transient RPC rate spikes,
+    // which is the right call for a public read endpoint.
+    const fetchChunk = async (
+      r: { from: bigint; to: bigint },
+      attempt = 0,
+    ): Promise<ChunkResult> => {
+      try {
+        return await client.getLogs({
+          address: WEB_DEPLOYMENT.factory!,
+          event: MARKET_CREATED_EVENT,
+          fromBlock: r.from,
+          toBlock: r.to,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isRateLimit =
+          msg.includes("rate limit") ||
+          msg.includes("429") ||
+          msg.includes("over rate");
+        if (isRateLimit && attempt < 3) {
+          await new Promise((res) => setTimeout(res, 600 * (attempt + 1)));
+          return fetchChunk(r, attempt + 1);
+        }
+        return [] as unknown as ChunkResult;
+      }
+    };
+
+    const batches: ChunkResult = [] as unknown as ChunkResult;
     for (let i = 0; i < ranges.length; i += PARALLEL) {
       const batch = ranges.slice(i, i + PARALLEL);
-      const results = await Promise.all(
-        batch.map((r) =>
-          client.getLogs({
-            address: WEB_DEPLOYMENT.factory!,
-            event: MARKET_CREATED_EVENT,
-            fromBlock: r.from,
-            toBlock: r.to,
-          }),
-        ),
-      );
-      batches.push(...results.flat());
+      const results = await Promise.all(batch.map((r) => fetchChunk(r)));
+      for (const r of results) batches.push(...r);
     }
 
     return batches.map((log) => ({
