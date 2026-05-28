@@ -9,7 +9,9 @@
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "web:dev": "pnpm --filter @regista11/web dev",
+    "web:build": "pnpm --filter @regista11/web build"
   },
   "devDependencies": {
     "turbo": "^2.5.6"
