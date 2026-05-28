@@ -121,18 +121,11 @@ export async function getFactoryMarkets(): Promise<FactoryMarketEvent[]> {
 async function advanceIndexer(): Promise<void> {
   const state = INDEXER_STATE!;
   const client = getPublicClient();
-
-  // X Layer free RPC: each eth_getLogs ≤ 100 blocks ("over 100 max"),
-  // and aggregate calls/sec are rate-limited ("over rate limit"). We
-  // walk forward from the saved cursor in 100-block windows with
-  // bounded parallelism + 429-aware retry. The per-call budget gives
-  // user requests a fast TTFB; remaining work resumes next request.
   const CHUNK = 100n;
   const PARALLEL = 3;
   const start = Date.now();
-
   const latest = await client.getBlockNumber();
-  if (latest <= state.cursorBlock) return; // already caught up
+  if (latest <= state.cursorBlock) return;
 
   type ChunkResult = Awaited<
     ReturnType<typeof client.getLogs<typeof MARKET_CREATED_EVENT>>
@@ -160,7 +153,6 @@ async function advanceIndexer(): Promise<void> {
         await new Promise((res) => setTimeout(res, 600 * (attempt + 1)));
         return fetchChunk(from, to, attempt + 1);
       }
-      // Non-recoverable: signal "don't advance past this block."
       return null;
     }
   };
@@ -168,19 +160,29 @@ async function advanceIndexer(): Promise<void> {
   while (state.cursorBlock < latest) {
     if (Date.now() - start > PER_CALL_SCAN_BUDGET_MS) break;
 
+    // BigInt arithmetic is split (`x += 1n` over `x + 1n`) because Next 15's
+    // @vercel/nft tracer eagerly constant-folds `state.cursorBlock + 1n` in
+    // variable initializers — it walks back to INDEXER_STATE (`let … = null`),
+    // statically resolves the LHS to null, and crashes with "Cannot mix BigInt".
+    // AssignmentExpressions aren't folded, so the same math via `+=` builds.
     const batchRanges: Array<{ from: bigint; to: bigint }> = [];
-    let cursor = state.cursorBlock + 1n;
-    for (let i = 0; i < PARALLEL && cursor <= latest; i++) {
-      const to = cursor + CHUNK - 1n;
+    let cursor: bigint = state.cursorBlock;
+    cursor += 1n;
+    let batched = 0;
+    while (batched < PARALLEL && cursor <= latest) {
+      let to: bigint = cursor;
+      to += CHUNK;
+      to -= 1n;
       batchRanges.push({ from: cursor, to: to > latest ? latest : to });
-      cursor = to + 1n;
+      cursor = to;
+      cursor += 1n;
+      batched += 1;
     }
 
     const results = await Promise.all(
       batchRanges.map((r) => fetchChunk(r.from, r.to)),
     );
 
-    // Advance cursor only past chunks that succeeded contiguously.
     let aborted = false;
     for (let i = 0; i < results.length; i++) {
       const logs = results[i];
@@ -198,7 +200,7 @@ async function advanceIndexer(): Promise<void> {
           agent: log.args.agent as Address,
           matchId: log.args.matchId as Hex,
           commitHash: log.args.commitHash as Hex,
-          marketDeadline: BigInt(log.args.marketDeadline ?? 0),
+          marketDeadline: log.args.marketDeadline ?? 0n,
           blockNumber: log.blockNumber ?? 0n,
         });
       }
