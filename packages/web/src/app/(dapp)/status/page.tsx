@@ -75,27 +75,27 @@ function LastTickPill({ ageSeconds }: { ageSeconds: number | null }) {
   if (ageSeconds === null) {
     return <span className="text-[var(--color-slate-text)]">—</span>;
   }
-  const stale = ageSeconds > 60;
   return (
     <span
       data-last-tick
-      data-stale={stale ? "true" : "false"}
       className="inline-flex items-center gap-1.5"
     >
       <span
         aria-hidden
-        className={
-          "inline-block h-1.5 w-1.5 rounded-full " +
-          (stale
-            ? "bg-[var(--color-action-orange)]"
-            : "bg-[var(--color-success-moss)] animate-pulse motion-reduce:animate-none")
-        }
+        className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-success-moss)] animate-pulse motion-reduce:animate-none"
       />
-      <span className={stale ? "text-[var(--color-action-orange)]" : ""}>
-        {stale ? "Stale" : `Updated ${ageSeconds}s ago`}
-      </span>
+      <span>{formatUptime(ageSeconds)}</span>
     </span>
   );
+}
+
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
 function AgentRuntimeBlock({
@@ -120,7 +120,10 @@ function AgentRuntimeBlock({
             </span>
           }
         />
-        <Row k="Last tick" v={<LastTickPill ageSeconds={lastTickAgeSeconds} />} />
+        {/* "Uptime" because the underlying value is seconds-since-startedAt;
+            the agent doesn't surface a per-tick heartbeat yet, so labelling
+            this "Last tick" overstates what the metric proves. */}
+        <Row k="Uptime" v={<LastTickPill ageSeconds={lastTickAgeSeconds} />} />
         <Row k="Started" v={relativeTime(agent.raw.startedAt)} />
         <Row k="Personas active" v={`${agent.raw.personasActive} of 11`} />
         <Row k="Current fixture" v={agent.raw.fixtureId ?? "—"} />
