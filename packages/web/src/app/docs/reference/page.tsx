@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import fs from "node:fs";
-import path from "node:path";
 
 import { Callout } from "@/components/docs/Callout";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { DocsPage } from "@/components/docs/DocsPage";
+import { WEB_DEPLOYMENT } from "@/lib/deployment";
 
 export const metadata: Metadata = {
   title: "Reference",
@@ -12,37 +11,12 @@ export const metadata: Metadata = {
     "Contract addresses, chain config, and the GET /api/health and GET /api/status response shapes.",
 };
 
-interface DeploymentFile {
-  factory?: string;
-  factoryAddress?: string;
-  PropMarketHookFactory?: string;
-  chainId?: number;
-  deployedAt?: string;
-}
-
-/** Read the factory address from packages/contracts/deployments/xlayer-mainnet.json
- *  at build time. Returns null if the file isn't there yet (pre-broadcast). */
+/** Read the factory address from the deployment artifact bundled into
+ *  the build via `src/data/deployments.json`. This is the same source
+ *  the rest of the app uses — using fs+cwd at runtime in the standalone
+ *  container resolves to a non-existent path. */
 function readFactoryAddress(): string | null {
-  try {
-    const p = path.join(
-      process.cwd(),
-      "..",
-      "contracts",
-      "deployments",
-      "xlayer-mainnet.json",
-    );
-    if (!fs.existsSync(p)) return null;
-    const raw = fs.readFileSync(p, "utf-8");
-    const data = JSON.parse(raw) as DeploymentFile;
-    return (
-      data.factoryAddress ??
-      data.PropMarketHookFactory ??
-      data.factory ??
-      null
-    );
-  } catch {
-    return null;
-  }
+  return WEB_DEPLOYMENT.factory ?? null;
 }
 
 export default function DocsReferencePage() {
@@ -68,7 +42,7 @@ export default function DocsReferencePage() {
           <tr>
             <td>PropMarketHookFactory</td>
             <td>
-              <code>{factory ?? "{{FACTORY_ADDR}} (pre-broadcast)"}</code>
+              <code>{factory ?? "Awaiting mainnet broadcast"}</code>
             </td>
             <td>X Layer 196</td>
           </tr>
